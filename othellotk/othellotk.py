@@ -39,6 +39,12 @@ COLOUR=("black", "white")
 HUMAN=0
 COMPUTER=1
 
+EDAX, STOCKFISH = "edax", "stockfish"
+ENGINE = STOCKFISH  # select EDAX or STOCKFISH
+VARIANT = "reversi" if ENGINE == EDAX else "othello"
+PASS = "pass" if ENGINE == STOCKFISH else "@@@@"
+POCKET = "[PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPpppppppppppppppppppppppppppppppp]" if ENGINE == STOCKFISH else ""
+
 class Othello(tk.Frame):
     def __init__(self, master):
         tk.Frame.__init__(self, master)
@@ -107,7 +113,7 @@ class Othello(tk.Frame):
         self.first = True
         self.movelist = []
         self.redolist = []
-        self.std_start_fen = "8/8/8/3pP3/3Pp3/8/8/8 b - - 0 1"
+        self.std_start_fen = "8/8/8/3pP3/3Pp3/8/8/8{} b - - 0 1".format(POCKET)
         self.createWidgets()
         self.gameover = False
         self.engine_active = False
@@ -522,7 +528,7 @@ class Othello(tk.Frame):
                 #self.add_move(x, y)
                 self.movelist.append(mv)
                 self.movecount += 1
-                if mv != "@@@@":                    
+                if mv not in ("@@@@", "pass"):
                     x, y = self.conv_to_coord(mv)
 
                     # place piece and flip opponents pieces
@@ -642,7 +648,7 @@ class Othello(tk.Frame):
     def add_move_to_listbox(self, moveno, move):
         #fmt = "% *d. " # eg. 1 -> " 1.  "
         #strmv1 = fmt % (3, move)
-        if move == "@@@@":
+        if move in ("@@@@", "pass"):
             move = "--"
         strcnt = str(moveno)
         if len(strcnt) < 2:
@@ -676,11 +682,11 @@ class Othello(tk.Frame):
             return
         if self.legal_moves == []:
             self.dprint("no move available - PASS forced")
-            self.add_move_to_list("@@@@")
+            self.add_move_to_list(PASS)
             self.stm = abs(self.stm - 1)
             self.print_board()
             if self.player[self.stm] == COMPUTER:
-                str1 = "usermove @@@@\n"
+                str1 = "usermove {}\n".format(PASS)
                 self.command(str1)
 
                 self.mv = ""
@@ -736,7 +742,7 @@ class Othello(tk.Frame):
         # convert move from board co-ordinates to othello format (e.g. 3, 5 goes to 'd6')
         l = "abcdefgh"[x]
         n = y + 1
-        move = l + str(n)
+        move = "P@" + l + str(n)
         self.print_board()
         self.canvas.update_idletasks()
  
@@ -932,9 +938,9 @@ class Othello(tk.Frame):
         mv = self.mv
 
         # pass
-        if mv == "@@":
+        if mv == PASS[2:]:
             self.stm = abs(self.stm - 1)
-            self.add_move_to_list("@@@@")
+            self.add_move_to_list(PASS)
             self.print_board()
             return
 
@@ -961,10 +967,13 @@ class Othello(tk.Frame):
             return
         self.dprint("engine path",path)
 
-        arglist = [path,"-xboard", "-n", "1"]
-        optionsfile = os.path.join (self.othellopath, "edax.ini")
-        if os.path.exists(optionsfile):
-            arglist.extend(["option-file", optionsfile])
+        if ENGINE == STOCKFISH:
+            arglist = [path, "load", "variants.ini"]
+        else:
+            arglist = [path, "-xboard", "-n", "1"]
+            optionsfile = os.path.join (self.othellopath, "edax.ini")
+            if os.path.exists(optionsfile):
+                arglist.extend(["option-file", optionsfile])
         self.dprint("subprocess args:",arglist)
 
         # engine working directory containing the executable
@@ -992,7 +1001,7 @@ class Othello(tk.Frame):
         # start thread to read stdout
         self.op = []
         self.soutt = _thread.start_new_thread( self.read_stdout, () )
-        #self.command('xboard\n')
+        self.command('xboard\n')
         self.command('protover 2\n')
 
         # Engine should respond to "protover 2" with "feature" command
@@ -1015,7 +1024,7 @@ class Othello(tk.Frame):
                 return
             time.sleep(0.25)
 
-        self.command('variant reversi\n')
+        self.command('variant {}\n'.format(VARIANT))
         self.command("setboard " + self.std_start_fen + "\n")
         self.command("st " + str(self.settings["time_per_move"]) + "\n") # time per move in seconds
         #self.command('sd 4\n')
